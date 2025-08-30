@@ -227,6 +227,14 @@ if "user" not in st.session_state:
 user = st.session_state["user"]
 user_id = user["id"]
 
+# === 대시보드 기간 토글 ===
+PERIOD_OPTIONS = {"7일": 7, "14일": 14, "30일": 30}
+st.sidebar.markdown("---")
+st.sidebar.subheader("대시보드 기간")
+period_label = st.sidebar.radio("기간 선택", list(PERIOD_OPTIONS.keys()), index=0, horizontal=True)
+DASHBOARD_DAYS = PERIOD_OPTIONS[period_label]
+
+
 # ---------- Header ----------
 st.title("Mood & Move")
 st.caption("하루 한 문항으로 오늘의 감정을 간접 추정하고, 맞춤 문장과 작은 행동을 추천합니다.")
@@ -345,25 +353,30 @@ st.markdown("---")
 tab1, tab2 = st.tabs(["내 대시보드", "전체 대시보드"])
 
 with tab1:
-    st.subheader("내 30일 대시보드")
-    df30 = fetch_user_logs(sb, user_id, days=30)
-    if df30.empty:
+    st.subheader(f"내 {DASHBOARD_DAYS}일 동안의 감정은 어땠을까요?")
+    dfp = fetch_user_logs(sb, user_id, days=DASHBOARD_DAYS)
+    if dfp.empty:
         st.info("아직 기록이 없어요.")
     else:
-        emo_counts = df30.groupby("emotion")["id"].count().reset_index(name="count")
+        emo_counts = dfp.groupby("emotion")["id"].count().reset_index(name="count")
         chart = alt.Chart(emo_counts).mark_bar().encode(
             x="emotion:N", y="count:Q", tooltip=["emotion", "count"]
         )
         st.altair_chart(chart, use_container_width=True)
-        st.metric("챌린지 완료율(30일)", f"{(df30['completed'].mean()*100):.0f}%")
+
+        st.metric(f"챌린지 완료율({DASHBOARD_DAYS}일)", f"{(dfp['completed'].mean()*100):.0f}%")
 
         st.write("최근 일별 감정")
-        daily = df30.sort_values("log_date").groupby("log_date").agg({"emotion":"last"}).reset_index()
+        daily = (dfp.sort_values("log_date")
+                    .groupby("log_date")
+                    .agg({"emotion": "last"})
+                    .reset_index())
         st.dataframe(daily, use_container_width=True)
 
+
 with tab2:
-    st.subheader("전체 30일 감정 분포(익명 합산)")
-    since = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+    st.subheader(f"전체 {DASHBOARD_DAYS}일 동안의 주변 사람들의 감정은 어떨까요?")
+    since = (datetime.date.today() - datetime.timedelta(days=DASHBOARD_DAYS)).isoformat()
     res = sb.table("logs").select("emotion, completed").gte("log_date", since).execute()
     all_df = pd.DataFrame(res.data or [])
     if all_df.empty:
@@ -374,4 +387,5 @@ with tab2:
             x="emotion:N", y="count:Q", tooltip=["emotion", "count"]
         )
         st.altair_chart(chart, use_container_width=True)
-        st.metric("전체 평균 완료율", f"{(all_df['completed'].mean()*100):.0f}%")
+        st.metric(f"전체 평균 완료율({DASHBOARD_DAYS}일)", f"{(all_df['completed'].mean()*100):.0f}%")
+
