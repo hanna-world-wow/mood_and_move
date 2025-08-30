@@ -1,0 +1,104 @@
+{
+  "행복": {
+    "color": "#FFD166",
+    "quotes": [
+      {"id": "joy_q1", "text": "좋은 건 보통 작고 가까이에 있어요.", "cooldown_days": 3},
+      {"id": "joy_q2", "text": "고마움을 찾으면 기쁨이 따라와요.", "cooldown_days": 3},
+      {"id": "joy_q3", "text": "오늘의 햇살만으로도 충분해요.", "cooldown_days": 3},
+      {"id": "joy_q4", "text": "행복은 성과가 아니라 습관이에요.", "cooldown_days": 3},
+      {"id": "joy_q5", "text": "지금의 만족이 내일의 힘이 돼요.", "cooldown_days": 3}
+    ],
+    "challenges": [
+      {"id": "joy_c1", "text": "친구 한 명에게 감사 메시지 보내기", "difficulty": 1, "cooldown_days": 3},
+      {"id": "joy_c2", "text": "오늘 웃게 만든 순간 사진 찍기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "joy_c3", "text": "좋아하는 노래 1곡 끝까지 듣기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "joy_c4", "text": "고마웠던 일 1가지 적기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "joy_c5", "text": "달콤한 간식 한 입 음미하기", "difficulty": 1, "cooldown_days": 2}
+    ]
+  },
+  "불안": {
+    "color": "#90CAF9",
+    "quotes": [
+      {"id": "fear_q1", "text": "호흡 4-4-6. 지금 여기.", "cooldown_days": 2},
+      {"id": "fear_q2", "text": "걱정은 메모로 꺼내두면 작아져요.", "cooldown_days": 2},
+      {"id": "fear_q3", "text": "확실한 것부터 한 걸음.", "cooldown_days": 2},
+      {"id": "fear_q4", "text": "완벽 대신 진행.", "cooldown_days": 2},
+      {"id": "fear_q5", "text": "불안은 안전을 찾으려는 마음의 신호예요.", "cooldown_days": 2}
+    ],
+    "challenges": [
+      {"id": "fear_c1", "text": "3분 호흡 명상 따라하기", "difficulty": 1, "cooldown_days": 1},
+      {"id": "fear_c2", "text": "오늘 걱정 1가지 종이에 쓰고 접기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "fear_c3", "text": "창밖에서 보이는 3가지 관찰하기", "difficulty": 1, "cooldown_days": 1},
+      {"id": "fear_c4", "text": "따뜻한 물 한 컵 마시기", "difficulty": 1, "cooldown_days": 1},
+      {"id": "fear_c5", "text": "해야 할 일 1개를 10분만 진행", "difficulty": 1, "cooldown_days": 1}
+    ]
+  },
+  "분노": {
+    "color": "#FF6B6B",
+    "quotes": [
+      {"id": "anger_q1", "text": "멈춤–호흡–선택. 내 반응은 내가 정해요.", "cooldown_days": 2},
+      {"id": "anger_q2", "text": "감정은 정보, 나는 조종사.", "cooldown_days": 2},
+      {"id": "anger_q3", "text": "거리를 두면 시야가 넓어져요.", "cooldown_days": 2},
+      {"id": "anger_q4", "text": "강한 에너지를 안전하게 흘려보내요.", "cooldown_days": 2},
+      {"id": "anger_q5", "text": "내 경계를 친절하게 말해요.", "cooldown_days": 2}
+    ],
+    "challenges": [
+      {"id": "anger_c1", "text": "벽 바라보며 1분 깊은 호흡 5회", "difficulty": 1, "cooldown_days": 1},
+      {"id": "anger_c2", "text": "짧은 산책 5분", "difficulty": 1, "cooldown_days": 1},
+      {"id": "anger_c3", "text": "속마음 메모 3줄 쓰기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "anger_c4", "text": "물 한 컵 마시고 어깨 스트레칭", "difficulty": 1, "cooldown_days": 1},
+      {"id": "anger_c5", "text": "말하기 전 3초 정지 연습 3회", "difficulty": 2, "cooldown_days": 2}
+    ]
+  },
+  "무기력": {
+    "color": "#BDBDBD",
+    "quotes": [
+      {"id": "apathy_q1", "text": "작게 시작하면 시작이 돼요.", "cooldown_days": 2},
+      {"id": "apathy_q2", "text": "1%의 움직임이 내일을 바꿔요.", "cooldown_days": 2},
+      {"id": "apathy_q3", "text": "완료가 동기를 만든다.", "cooldown_days": 2},
+      {"id": "apathy_q4", "text": "의지 대신 설계: 더 쉽게, 더 짧게.", "cooldown_days": 2},
+      {"id": "apathy_q5", "text": "멈춤도 과정의 일부.", "cooldown_days": 2}
+    ],
+    "challenges": [
+      {"id": "apathy_c1", "text": "얼굴에 시원한 물 한 번 튀기기", "difficulty": 1, "cooldown_days": 1},
+      {"id": "apathy_c2", "text": "방 정리 3분 타이머", "difficulty": 1, "cooldown_days": 1},
+      {"id": "apathy_c3", "text": "물 300ml 마시기", "difficulty": 1, "cooldown_days": 1},
+      {"id": "apathy_c4", "text": "해야 할 일 중 가장 작은 조각 1개만", "difficulty": 1, "cooldown_days": 1},
+      {"id": "apathy_c5", "text": "창문 열고 바깥 공기 1분 마시기", "difficulty": 1, "cooldown_days": 1}
+    ]
+  },
+  "슬픔": {
+    "color": "#9FA8DA",
+    "quotes": [
+      {"id": "sad_q1", "text": "슬픔은 사랑의 또 다른 이름.", "cooldown_days": 3},
+      {"id": "sad_q2", "text": "울음도 회복의 움직임.", "cooldown_days": 3},
+      {"id": "sad_q3", "text": "오늘은 부드럽게 대할 날.", "cooldown_days": 3},
+      {"id": "sad_q4", "text": "나를 지나가는 구름처럼 바라보기.", "cooldown_days": 3},
+      {"id": "sad_q5", "text": "괜찮지 않아도 괜찮아요.", "cooldown_days": 3}
+    ],
+    "challenges": [
+      {"id": "sad_c1", "text": "따뜻한 차 준비하고 천천히 마시기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "sad_c2", "text": "나를 위로하는 문장 1줄 적기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "sad_c3", "text": "좋아하는 음악 1곡 듣기", "difficulty": 1, "cooldown_days": 2},
+      {"id": "sad_c4", "text": "짧은 햇빛 받기 3분", "difficulty": 1, "cooldown_days": 1},
+      {"id": "sad_c5", "text": "산책 5분 (실내면 제자리 걷기)", "difficulty": 1, "cooldown_days": 1}
+    ]
+  },
+  "집중": {
+    "color": "#80CBC4",
+    "quotes": [
+      {"id": "focus_q1", "text": "한 번에 하나. 지금 이거.", "cooldown_days": 1},
+      {"id": "focus_q2", "text": "10분 집중이 관성을 만든다.", "cooldown_days": 1},
+      {"id": "focus_q3", "text": "방해를 줄이면 집중이 늘어요.", "cooldown_days": 1},
+      {"id": "focus_q4", "text": "작업 전 1분 정리 = 집중 10분 보너스.", "cooldown_days": 1},
+      {"id": "focus_q5", "text": "진짜 중요한 일 1개만.", "cooldown_days": 1}
+    ],
+    "challenges": [
+      {"id": "focus_c1", "text": "타이머 10분 집중(폰 비행기 모드)", "difficulty": 1, "cooldown_days": 1},
+      {"id": "focus_c2", "text": "데스크 정리 3분 후 시작", "difficulty": 1, "cooldown_days": 1},
+      {"id": "focus_c3", "text": "할 일 1개만 선택해 끝내기", "difficulty": 1, "cooldown_days": 1},
+      {"id": "focus_c4", "text": "웹·앱 알림 10분 꺼두기", "difficulty": 1, "cooldown_days": 1},
+      {"id": "focus_c5", "text": "작업 전 물 200ml 마시기", "difficulty": 1, "cooldown_days": 1}
+    ]
+  }
+}
