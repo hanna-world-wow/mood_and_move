@@ -301,8 +301,6 @@ else:
     })
 
     st.success(f"오늘의 결과: **{emo}**")
-    with st.expander("감정 점수 기여도(참고)"):
-        st.json(score_detail)
 
 # ---------- Recommendation (오늘 행에서 고정 사용) ----------
 now = datetime.datetime.now()
