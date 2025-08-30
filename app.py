@@ -49,7 +49,7 @@ def upsert_user(sb: Client, username: str):
     res = sb.table("users").select("*").eq("username", username).execute()
     if res.data:
         return res.data[0]
-    res = sb.table("users").insert({"username": username}).select("*").execute()
+    res = sb.table("users").insert({"username": username}).execute()
     return res.data[0]
 
 def fetch_user_logs(sb: Client, user_id: str, days: int = 120) -> pd.DataFrame:
@@ -63,7 +63,7 @@ def get_today_row(sb: Client, user_id: str, day: str):
 
 def insert_today_row(sb: Client, user_id: str, day: str, payload: dict):
     payload = {"user_id": user_id, "log_date": day, **payload}
-    res = sb.table("logs").insert(payload).select("*").execute()
+    res = sb.table("logs").insert(payload).execute()
     return res.data[0]
 
 def update_row(sb: Client, row_id: int, payload: dict):
