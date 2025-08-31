@@ -1,4 +1,9 @@
-# app.py — Mood & Move (Multi-user on Supabase: 1Q/day → Recommend (locked) → Save (once) → Dashboards)
+# app.py — Mood & Move (Supabase Multi-user · Daily 1Q → Result/Recommend → Dashboard)
+# - Step UI with progress & step indicator
+# - Locks question & recommendation per day
+# - Prevents duplicate point increment per day
+# - 7/14/30-day dashboard period toggle
+# - Uses Supabase Python v2 (no insert().select("*") chaining)
 
 import json
 import datetime
@@ -13,20 +18,17 @@ from supabase import create_client, Client
 # ---------- App config ----------
 st.set_page_config(page_title="Mood & Move", page_icon="✨", layout="centered")
 
-# ---------- Data files ----------
+# ---------- Data ----------
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / "data.json"
-
 EMOTIONS = ["행복", "불안", "분노", "무기력", "슬픔", "집중"]
-LEVEL_THRESHOLDS = [0, 3, 7, 15, 30, 60]  # 누적 포인트 → 레벨
+LEVEL_THRESHOLDS = [0, 3, 7, 15, 30, 60]
 
-# ---------- Load content ----------
 @st.cache_data
 def load_data():
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
 data = load_data()
-# 데이터에 실제 존재하는 감정만 사용(안전)
 emotions = [e for e in EMOTIONS if e in data] or list(data.keys())
 
 # ---------- Supabase ----------
@@ -49,6 +51,7 @@ def upsert_user(sb: Client, username: str):
     res = sb.table("users").select("*").eq("username", username).execute()
     if res.data:
         return res.data[0]
+    # Supabase v2: insert 후 execute() (select 체이닝 X)
     res = sb.table("users").insert({"username": username}).execute()
     return res.data[0]
 
@@ -152,9 +155,8 @@ def infer_emotion_from_choice(choice):
     cands = [e for e, v in scores.items() if abs(v - max_val) < 1e-9]
     return random.choice(cands) if cands else emotions[0], scores
 
-# ---------- Cooldown helpers ----------
+# ---------- History / cooldown helpers ----------
 def build_history_from_df(df: pd.DataFrame):
-    """유저 로그에서 각 아이템(quote_id/challenge_id)의 마지막 제공 날짜 사전 생성"""
     hist = {}
     if df.empty:
         return hist
@@ -185,7 +187,6 @@ def eligible(items, history, today):
 def pick_item(items, history, today):
     pool = eligible(items, history, today)
     if not pool:
-        # 모두 쿨다운 중이면 가장 오래된 것 우선
         items_sorted = sorted(items, key=lambda x: history.get(x["id"], datetime.datetime(1970,1,1)))
         return items_sorted[0]
     first_diff = pool[0].get("difficulty", 1)
@@ -227,34 +228,46 @@ if "user" not in st.session_state:
 user = st.session_state["user"]
 user_id = user["id"]
 
-# === 대시보드 기간 토글 ===
-PERIOD_OPTIONS = {"7일": 7, "14일": 14, "30일": 30}
-st.sidebar.markdown("---")
-st.sidebar.subheader("대시보드 기간")
-period_label = st.sidebar.radio("기간 선택", list(PERIOD_OPTIONS.keys()), index=0, horizontal=True)
-DASHBOARD_DAYS = PERIOD_OPTIONS[period_label]
+# ---------- Step Indicator Helpers ----------
+STEPS = ["quiz", "result", "dashboard"]
+STEP_TITLES = {"quiz": "① 문항", "result": "② 결과/추천", "dashboard": "③ 대시보드"}
 
+def current_step_idx() -> int:
+    step = st.session_state.get("step", "quiz")
+    return STEPS.index(step) if step in STEPS else 0
+
+def render_step_header():
+    idx = current_step_idx()
+    st.progress((idx + 1) / len(STEPS))
+    cols = st.columns(len(STEPS))
+    for i, key in enumerate(STEPS):
+        label = STEP_TITLES[key]
+        if i == idx:
+            cols[i].markdown(f"**{label} · {i+1}/{len(STEPS)}**")
+        else:
+            cols[i].markdown(f"{label}")
 
 # ---------- Header ----------
 st.title("Mood & Move")
-st.caption("하루 한 문항으로 오늘의 감정을 간접 추정하고, 맞춤 문장과 작은 행동을 추천합니다.")
+st.caption("하루 한 문항으로 감정을 추정하고, 맞춤 한 문장과 작은 행동을 추천합니다.")
 
-# ---------- Load user data ----------
+# ---------- Dashboard Period Toggle (sidebar) ----------
+PERIOD_OPTIONS = {"7일": 7, "14일": 14, "30일": 30}
+st.sidebar.markdown("---")
+st.sidebar.subheader("대시보드 기간")
+period_label = st.sidebar.radio("기간 선택", list(PERIOD_OPTIONS.keys()), index=0, horizontal=True, key="period_radio")
+DASHBOARD_DAYS = PERIOD_OPTIONS[period_label]
+
+# ---------- Common state ----------
 today_str = datetime.date.today().isoformat()
-df_user = fetch_user_logs(sb, user_id, days=120)
-history = build_history_from_df(df_user)
+df_user_full = fetch_user_logs(sb, user_id, days=120)
+history = build_history_from_df(df_user_full)
 
-# ---------- Today flow ----------
-today_row = get_today_row(sb, user_id, today_str)
-
-# 1) 이미 오늘 결과가 있으면 그대로 사용
-if today_row:
-    emo = today_row["emotion"]
-    st.success(f"오늘의 결과: **{emo}**")
-    if today_row.get("choice_key"):
-        st.caption(f"선택: {today_row['choice_key']}")
-else:
-    # 2) 오늘 질문 고정(세션), 제출 전 리런 되어도 유지
+def get_or_create_today_row():
+    row = get_today_row(sb, user_id, today_str)
+    if row:
+        return row
+    # lock today's question in session
     if ("quiz_date" not in st.session_state) or (st.session_state["quiz_date"] != today_str):
         st.session_state["quiz_date"] = today_str
         q = random.choice(QUESTIONS)
@@ -266,92 +279,130 @@ else:
     qid = st.session_state["quiz_qid"]
     q = next(x for x in QUESTIONS if x["id"] == qid)
     order = st.session_state["quiz_order"]
-
-    st.subheader("오늘의 한 문항")
-    st.write(f"**{q['text']}**")
     options = [q["options"][i] for i in order]
-    labels = [opt["label"] for opt in options]
-    sel = st.radio("하나를 선택하세요", labels, index=st.session_state.get("quiz_choice_index", None), key="oneq_radio")
-    if sel is not None:
-        st.session_state["quiz_choice_index"] = labels.index(sel)
-
-    submitted = st.button("결과 보기", type="primary")
-    if not submitted:
-        st.stop()
     if st.session_state.get("quiz_choice_index") is None:
-        st.warning("선택지를 골라주세요."); st.stop()
-
+        return None
     choice = options[st.session_state["quiz_choice_index"]]
-    emo, score_detail = infer_emotion_from_choice(choice)
-
-    # 오늘 추천(quote/challenge) 고정: 유저 이력 기반 쿨다운 반영
+    emo, _ = infer_emotion_from_choice(choice)
     now = datetime.datetime.now()
     emo_data = data[emo]
     quote_item = pick_item(emo_data["quotes"], history, now)
     chall_item = pick_item(emo_data["challenges"], history, now)
+    row = insert_today_row(
+        sb, user_id, today_str,
+        {
+            "emotion": emo,
+            "choice_key": choice["key"],
+            "quote_id": quote_item["id"],
+            "challenge_id": chall_item["id"],
+            "completed": False,
+            "points_delta": 0
+        }
+    )
+    return row
 
-    # DB에 오늘 행 생성 (추천 포함)
-    today_row = insert_today_row(sb, user_id, today_str, {
-        "emotion": emo,
-        "choice_key": choice["key"],
-        "quote_id": quote_item["id"],
-        "challenge_id": chall_item["id"],
-        "completed": False,
-        "points_delta": 0
-    })
+# init step
+if "step" not in st.session_state:
+    st.session_state["step"] = "result" if get_today_row(sb, user_id, today_str) else "quiz"
 
-    st.success(f"오늘의 결과: **{emo}**")
+# ---------- STEP 1: QUIZ ----------
+if st.session_state["step"] == "quiz":
+    render_step_header()
+    if ("quiz_date" not in st.session_state) or (st.session_state["quiz_date"] != today_str):
+        st.session_state["quiz_date"] = today_str
+        q = random.choice(QUESTIONS)
+        order = list(range(len(q["options"])))
+        random.shuffle(order)
+        st.session_state["quiz_qid"] = q["id"]
+        st.session_state["quiz_order"] = order
+        st.session_state["quiz_choice_index"] = None
 
-# ---------- Recommendation (오늘 행에서 고정 사용) ----------
-now = datetime.datetime.now()
-emo = today_row["emotion"]
-emo_data = data[emo]
-# 행에 저장된 추천 ID로 렌더링
-quote_id = today_row.get("quote_id")
-chall_id = today_row.get("challenge_id")
-quote_item = next((x for x in emo_data["quotes"] if x["id"] == quote_id), None)
-chall_item = next((x for x in emo_data["challenges"] if x["id"] == chall_id), None)
+    qid = st.session_state["quiz_qid"]
+    q = next(x for x in QUESTIONS if x["id"] == qid)
+    order = st.session_state["quiz_order"]
 
-# 안전장치: 없으면 새로 선정해 업데이트
-if not quote_item or not chall_item:
-    quote_item = pick_item(emo_data["quotes"], history, now)
-    chall_item = pick_item(emo_data["challenges"], history, now)
-    update_row(sb, today_row["id"], {"quote_id": quote_item["id"], "challenge_id": chall_item["id"]})
+    st.header("① 오늘의 한 문항")
+    st.write(f"**{q['text']}**")
 
-st.subheader(f"오늘의 추천 · {emo}")
-st.write(f"**한 문장**: {quote_item['text']}")
-st.write(f"**챌린지**: {chall_item['text']}")
+    options = [q["options"][i] for i in order]
+    labels = [opt["label"] for opt in options]
+    sel = st.radio(
+        "하나를 선택하세요",
+        labels,
+        index=st.session_state.get("quiz_choice_index", None),
+        key="oneq_radio"
+    )
+    if sel is not None:
+        st.session_state["quiz_choice_index"] = labels.index(sel)
 
-done = st.checkbox("챌린지 완료!", value=bool(today_row.get("completed")))
+    col1, col2 = st.columns(2)
+    with col1:
+        disabled_next = st.session_state.get("quiz_choice_index") is None
+        if st.button("결과 보기 →", type="primary", disabled=disabled_next, key="btn_go_result"):
+            row = get_or_create_today_row()
+            if row:
+                st.session_state["step"] = "result"
+                st.rerun()
+    with col2:
+        st.button("초기화", on_click=lambda: st.session_state.update({"quiz_choice_index": None}), key="btn_reset_quiz")
 
-# 하루 1회만 포인트 반영 (이미 저장 여부)
-already_saved = bool(today_row.get("completed"))
-if already_saved:
-    st.info("오늘 기록은 이미 저장되었습니다. (포인트는 하루 1회만 반영)")
+# ---------- STEP 2: RESULT + RECOMMEND ----------
+elif st.session_state["step"] == "result":
+    render_step_header()
+    today_row = get_today_row(sb, user_id, today_str)
+    if not today_row:
+        st.session_state["step"] = "quiz"
+        st.rerun()
 
-if st.button("기록 저장", type="primary", disabled=already_saved):
-    payload = {"completed": bool(done)}
-    if done and not already_saved:
-        payload["points_delta"] = 1
-    update_row(sb, today_row["id"], payload)
-    st.success("저장되었습니다. 페이지를 새로고침하면 대시보드에 반영됩니다.")
-    st.balloons()
+    emo = today_row["emotion"]
+    st.header("② 오늘의 결과")
+    st.success(f"오늘의 감정: **{emo}**")
+    if today_row.get("choice_key"):
+        st.caption(f"선택: {today_row['choice_key']}")
 
-# ---------- Sidebar: 감정 레벨(최근 120일 points 합산) ----------
-df_user = fetch_user_logs(sb, user_id, days=120)  # 저장 후 갱신
-points_by_emo = (df_user.groupby("emotion")["points_delta"].sum() if not df_user.empty else pd.Series(dtype=int))
-st.sidebar.header("감정 레벨")
-for e in emotions:
-    pts = int(points_by_emo.get(e, 0))
-    st.sidebar.write(f"{e} · Lv.{calc_level(pts)} · {pts} pts")
-    st.sidebar.progress(progress_fraction(pts))
+    emo_data = data[emo]
+    quote_id = today_row.get("quote_id")
+    chall_id = today_row.get("challenge_id")
+    quote_item = next((x for x in emo_data["quotes"] if x["id"] == quote_id), None)
+    chall_item = next((x for x in emo_data["challenges"] if x["id"] == chall_id), None)
+    now = datetime.datetime.now()
+    if not quote_item or not chall_item:
+        quote_item = pick_item(emo_data["quotes"], history, now)
+        chall_item = pick_item(emo_data["challenges"], history, now)
+        update_row(sb, today_row["id"], {"quote_id": quote_item["id"], "challenge_id": chall_item["id"]})
 
-# ---------- Dashboards ----------
-st.markdown("---")
-tab1, tab2 = st.tabs(["내 대시보드", "전체 대시보드"])
+    st.subheader(f"오늘의 추천 · {emo}")
+    st.write(f"**한 문장**: {quote_item['text']}")
+    st.write(f"**챌린지**: {chall_item['text']}")
 
-with tab1:
-    st.subheader(f"내 {DASHBOARD_DAYS}일 동안의 감정은 어땠을까요?")
+    done = st.checkbox("챌린지 완료!", value=bool(today_row.get("completed")), key="chk_done")
+    already_saved = bool(today_row.get("completed"))
+    if already_saved:
+        st.info("오늘 기록은 이미 저장되었습니다. (포인트는 하루 1회만 반영)")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("기록 저장", type="primary", disabled=already_saved, key="btn_save"):
+            payload = {"completed": bool(done)}
+            if done and not already_saved:
+                payload["points_delta"] = 1
+            update_row(sb, today_row["id"], payload)
+            st.success("저장되었습니다.")
+            st.balloons()
+            st.session_state["step"] = "dashboard"
+            st.rerun()
+    with col2:
+        st.button("← 문항 다시 보기", on_click=lambda: st.session_state.update({"step": "quiz"}), key="btn_back_quiz")
+    with col3:
+        st.button("대시보드로 →", on_click=lambda: st.session_state.update({"step": "dashboard"}), key="btn_go_dashboard")
+
+# ---------- STEP 3: DASHBOARD ----------
+elif st.session_state["step"] == "dashboard":
+    render_step_header()
+    st.header("③ 대시보드")
+
+    # 개인
+    st.subheader(f"내 {DASHBOARD_DAYS}일 대시보드")
     dfp = fetch_user_logs(sb, user_id, days=DASHBOARD_DAYS)
     if dfp.empty:
         st.info("아직 기록이 없어요.")
@@ -361,7 +412,6 @@ with tab1:
             x="emotion:N", y="count:Q", tooltip=["emotion", "count"]
         )
         st.altair_chart(chart, use_container_width=True)
-
         st.metric(f"챌린지 완료율({DASHBOARD_DAYS}일)", f"{(dfp['completed'].mean()*100):.0f}%")
 
         st.write("최근 일별 감정")
@@ -371,9 +421,9 @@ with tab1:
                     .reset_index())
         st.dataframe(daily, use_container_width=True)
 
-
-with tab2:
-    st.subheader(f"전체 {DASHBOARD_DAYS}일 동안의 주변 사람들의 감정은 어떨까요?")
+    st.markdown("---")
+    # 전체
+    st.subheader(f"전체 {DASHBOARD_DAYS}일 감정 분포(익명 합산)")
     since = (datetime.date.today() - datetime.timedelta(days=DASHBOARD_DAYS)).isoformat()
     res = sb.table("logs").select("emotion, completed").gte("log_date", since).execute()
     all_df = pd.DataFrame(res.data or [])
@@ -387,3 +437,18 @@ with tab2:
         st.altair_chart(chart, use_container_width=True)
         st.metric(f"전체 평균 완료율({DASHBOARD_DAYS}일)", f"{(all_df['completed'].mean()*100):.0f}%")
 
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.button("← 결과로 돌아가기", on_click=lambda: st.session_state.update({"step": "result"}), key="btn_back_result")
+    with col2:
+        st.button("오늘 문항 다시 보기", on_click=lambda: st.session_state.update({"step": "quiz"}), key="btn_go_quiz")
+
+# ---------- Sidebar: Emotion Levels (last 120 days) ----------
+df_user_levels = fetch_user_logs(sb, user_id, days=120)
+points_by_emo = (df_user_levels.groupby("emotion")["points_delta"].sum() if not df_user_levels.empty else pd.Series(dtype=int))
+st.sidebar.header("감정 레벨")
+for e in emotions:
+    pts = int(points_by_emo.get(e, 0))
+    st.sidebar.write(f"{e} · Lv.{calc_level(pts)} · {pts} pts")
+    st.sidebar.progress(progress_fraction(pts))
