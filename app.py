@@ -72,6 +72,52 @@ def insert_today_row(sb: Client, user_id: str, day: str, payload: dict):
 def update_row(sb: Client, row_id: int, payload: dict):
     sb.table("logs").update(payload).eq("id", row_id).execute()
 
+# ---------- Radar (Hexagon) Chart Helpers ----------
+def build_emotion_counts(df: pd.DataFrame, emotions: list[str]) -> tuple[dict, dict]:
+    """감정별 (1)답변 카운트, (2)완료 카운트를 dict로 반환(없으면 0으로 채움)"""
+    ans = df.groupby("emotion")["emotion"].count().to_dict() if not df.empty else {}
+    done = df[df["completed"] == True].groupby("emotion")["completed"].count().to_dict() if not df.empty else {}
+    ans = {e: int(ans.get(e, 0)) for e in emotions}
+    done = {e: int(done.get(e, 0)) for e in emotions}
+    return ans, done
+
+def radar_chart(emotions: list[str], ans_counts: dict, done_counts: dict, title: str = ""):
+    """Altair 레이더(육각형) 차트: 외곽선=답변감정, 면=완료챌린지"""
+    import math
+    import pandas as pd
+    import altair as alt
+
+    max_r = max([*ans_counts.values(), *done_counts.values(), 1])
+
+    rows = []
+    for i, e in enumerate(emotions):
+        angle = 2 * math.pi * i / len(emotions)
+        rows.append({"emo": e, "series": "답변감정", "angle": angle, "value": ans_counts[e], "r": ans_counts[e] / max_r})
+        rows.append({"emo": e, "series": "완료챌린지", "angle": angle, "value": done_counts[e], "r": done_counts[e] / max_r})
+
+    # 폐곡선(첫 점을 맨 뒤에 복제)
+    rows.append({"emo": emotions[0], "series": "답변감정", "angle": 2 * math.pi, "value": ans_counts[emotions[0]], "r": ans_counts[emotions[0]] / max_r})
+    rows.append({"emo": emotions[0], "series": "완료챌린지", "angle": 2 * math.pi, "value": done_counts[emotions[0]], "r": done_counts[emotions[0]] / max_r})
+
+    df_plot = pd.DataFrame(rows)
+
+    base = alt.Chart(df_plot).encode(
+        theta="angle:Q",
+        radius="r:Q",
+        tooltip=["emo:N", "series:N", "value:Q"]
+    )
+
+    area = base.transform_filter(alt.datum.series == "완료챌린지").mark_area(opacity=0.35).encode(color="series:N")
+    line = base.mark_line(point=True).encode(color="series:N", detail="series:N")
+
+    # 축 라벨(감정명)
+    tick_angles = [2 * math.pi * i / len(emotions) for i in range(len(emotions))]
+    ticks_df = pd.DataFrame({"angles": tick_angles, "emo": emotions})
+    labels = alt.Chart(ticks_df).mark_text(radiusOffset=12).encode(theta="angles:Q", text="emo:N")
+
+    return (area + line + labels).properties(title=title)
+
+
 # ---------- Questions (10 × 4 options) ----------
 QUESTIONS = [
     {"id": "q1","text": "오늘 가장 듣고 싶은 음악은?",
@@ -249,7 +295,7 @@ def render_step_header():
 
 # ---------- Header ----------
 st.title("Mood & Move")
-st.caption("하루 한 문항으로 감정을 추정하고, 맞춤 한 문장과 작은 행동을 추천합니다.")
+st.caption("하루의 감정, 하나의 챌린지")
 
 # ---------- Dashboard Period Toggle (sidebar) ----------
 PERIOD_OPTIONS = {"7일": 7, "14일": 14, "30일": 30}
@@ -301,6 +347,57 @@ def get_or_create_today_row():
         }
     )
     return row
+
+# ---------- Radar (Hexagon) Chart Helper ----------
+def build_emotion_counts(df: pd.DataFrame, emotions: list[str]) -> tuple[dict, dict]:
+    """df에서 감정별 (1)답변 카운트, (2)완료 카운트를 계산해 0 채워서 dict로 반환"""
+    ans = df.groupby("emotion")["emotion"].count().to_dict() if not df.empty else {}
+    done = df[df["completed"] == True].groupby("emotion")["completed"].count().to_dict() if not df.empty else {}
+    # 부족한 감정은 0으로 채우기
+    ans = {e: int(ans.get(e, 0)) for e in emotions}
+    done = {e: int(done.get(e, 0)) for e in emotions}
+    return ans, done
+
+def radar_chart(emotions: list[str], ans_counts: dict, done_counts: dict, title: str = ""):
+    """Altair로 레이더(육각형) 차트 그리기: 답변(라인) vs 완료(면) 오버레이"""
+    import math
+    import pandas as pd
+    import altair as alt
+
+    # 반지름 정규화(두 시리즈 중 최댓값 기준)
+    max_r = max([*ans_counts.values(), *done_counts.values(), 1])
+
+    rows = []
+    for i, e in enumerate(emotions):
+        angle = 2 * math.pi * i / len(emotions)
+        rows.append({"emo": e, "series": "답변감정", "angle": angle, "value": ans_counts[e], "r": ans_counts[e] / max_r})
+        rows.append({"emo": e, "series": "완료챌린지", "angle": angle, "value": done_counts[e], "r": done_counts[e] / max_r})
+
+    # 폐곡선(첫 점을 맨 뒤에 한 번 더 추가)
+    rows.append({"emo": emotions[0], "series": "답변감정", "angle": 2 * math.pi, "value": ans_counts[emotions[0]], "r": ans_counts[emotions[0]] / max_r})
+    rows.append({"emo": emotions[0], "series": "완료챌린지", "angle": 2 * math.pi, "value": done_counts[emotions[0]], "r": done_counts[emotions[0]] / max_r})
+
+    df_plot = pd.DataFrame(rows)
+
+    base = alt.Chart(df_plot).encode(
+        theta="angle:Q",
+        radius="r:Q",
+        tooltip=["emo:N", "series:N", "value:Q"]
+    )
+
+    # 완료챌린지 = 채워지는 면, 답변감정 = 외곽선/포인트
+    area = base.transform_filter(alt.datum.series == "완료챌린지").mark_area(opacity=0.35).encode(color="series:N")
+    line = base.mark_line(point=True).encode(color="series:N", detail="series:N")
+
+    # 축 라벨(감정명)
+    ticks = pd.DataFrame({
+        "angles": [2 * math.pi * i / len(emotions) for i in range(len(emotions))],
+        "emo": emotions
+    })
+    labels = alt.Chart(ticks).mark_text(radiusOffset=12).encode(theta="angles:Q", text="emo:N")
+
+    return (area + line + labels).properties(title=title)
+
 
 # init step
 if "step" not in st.session_state:
@@ -441,11 +538,12 @@ elif st.session_state["step"] == "dashboard":
     if dfp.empty:
         st.info("아직 기록이 없어요.")
     else:
-        emo_counts = dfp.groupby("emotion")["id"].count().reset_index(name="count")
-        chart = alt.Chart(emo_counts).mark_bar().encode(
-            x="emotion:N", y="count:Q", tooltip=["emotion", "count"]
-        )
+        # 레이더(육각형) — 1) 문항답변 카운트 vs 2) 완료 카운트
+        ans_counts, done_counts = build_emotion_counts(dfp, emotions)
+        chart = radar_chart(emotions, ans_counts, done_counts, title="감정 레벨 (답변 vs 완료)")
         st.altair_chart(chart, use_container_width=True)
+
+        # 보조 지표
         st.metric(f"챌린지 완료율({DASHBOARD_DAYS}일)", f"{(dfp['completed'].mean()*100):.0f}%")
 
         st.write("최근 일별 감정")
@@ -464,11 +562,10 @@ elif st.session_state["step"] == "dashboard":
     if all_df.empty:
         st.info("아직 전체 기록이 적습니다.")
     else:
-        emo_counts = all_df.groupby("emotion")["emotion"].count().reset_index(name="count")
-        chart = alt.Chart(emo_counts).mark_bar().encode(
-            x="emotion:N", y="count:Q", tooltip=["emotion", "count"]
-        )
-        st.altair_chart(chart, use_container_width=True)
+        ans_counts_all, done_counts_all = build_emotion_counts(all_df, emotions)
+        chart_all = radar_chart(emotions, ans_counts_all, done_counts_all, title="전체 감정 (답변 vs 완료)")
+        st.altair_chart(chart_all, use_container_width=True)
+
         st.metric(f"전체 평균 완료율({DASHBOARD_DAYS}일)", f"{(all_df['completed'].mean()*100):.0f}%")
 
     st.markdown("---")
