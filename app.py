@@ -3,7 +3,8 @@
 # - Locks question & recommendation per day
 # - Prevents duplicate point increment per day
 # - 7/14/30-day dashboard period toggle
-# - Uses Supabase Python v2 (no insert().select("*") chaining)
+# - Supabase Python v2 compatible (no insert().select("*") chaining)
+# - FIX: If user already answered today, show the SAME saved question in read-only (stored question_id)
 
 import json
 import datetime
@@ -51,7 +52,6 @@ def upsert_user(sb: Client, username: str):
     res = sb.table("users").select("*").eq("username", username).execute()
     if res.data:
         return res.data[0]
-    # Supabase v2: insert 후 execute() (select 체이닝 X)
     res = sb.table("users").insert({"username": username}).execute()
     return res.data[0]
 
@@ -293,6 +293,7 @@ def get_or_create_today_row():
         {
             "emotion": emo,
             "choice_key": choice["key"],
+            "question_id": q["id"],          # ← 저장된 질문 ID
             "quote_id": quote_item["id"],
             "challenge_id": chall_item["id"],
             "completed": False,
@@ -308,6 +309,39 @@ if "step" not in st.session_state:
 # ---------- STEP 1: QUIZ ----------
 if st.session_state["step"] == "quiz":
     render_step_header()
+
+    # 이미 오늘 응답이 존재하면: 저장된 질문을 읽기 전용으로 보여주기
+    today_row_existing = get_today_row(sb, user_id, today_str)
+    if today_row_existing:
+        st.header("① 오늘의 한 문항 (이미 제출됨)")
+        qid_saved = today_row_existing.get("question_id")
+        choice_saved = today_row_existing.get("choice_key")
+
+        q = next((x for x in QUESTIONS if x["id"] == qid_saved), None) if qid_saved else None
+        if not q:
+            st.info("오늘 문항은 이미 제출되었습니다.")
+            st.button("결과로 →", type="primary",
+                      on_click=lambda: st.session_state.update({"step": "result"}),
+                      key="btn_go_result_readonly")
+            st.stop()
+
+        st.write(f"**{q['text']}**")
+        labels = [opt["label"] for opt in q["options"]]
+        sel_index = next((i for i, opt in enumerate(q["options"]) if opt["key"] == choice_saved), 0)
+        st.radio("선택", labels, index=sel_index, disabled=True, key="oneq_radio_readonly")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button("결과로 →", type="primary",
+                      on_click=lambda: st.session_state.update({"step": "result"}),
+                      key="btn_go_result_from_readonly")
+        with col2:
+            st.button("대시보드로 →",
+                      on_click=lambda: st.session_state.update({"step": "dashboard"}),
+                      key="btn_go_dashboard_from_readonly")
+        st.stop()
+
+    # (아직 응답 전) 오늘 질문 고정/복원
     if ("quiz_date" not in st.session_state) or (st.session_state["quiz_date"] != today_str):
         st.session_state["quiz_date"] = today_str
         q = random.choice(QUESTIONS)
